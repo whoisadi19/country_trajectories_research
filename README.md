@@ -67,7 +67,7 @@ To capture the tri-pillar nature of sustainable development without collinear re
 ### Phase 1: Raw Data Acquisition (`scripts/01_extract_data.py`)
 - **API Extraction:** Rather than using static files, data was extracted programmatically via the World Bank API using `wbgapi` across all 266 world entities and 33 years ($1990\text{–}2022$).
 - **Data Engineering Resilience:** Initial combined queries suffered connection drops (Cloudflare timeout at page 34). The extraction pipeline was refactored into a sequential, rate-limited extractor querying each indicator independently and merging into a unified longitudinal schema:
-  $$\text{Raw Dataset Shape: } 8,778 \text{ rows} \times 8 \text{ columns} \longrightarrow \text{data/raw/wdi_raw_data.csv}$$
+> **Raw Dataset Output:** 8,778 rows × 8 columns → `data/raw/wdi_raw_data.csv`
 
 ---
 
@@ -75,15 +75,15 @@ To capture the tri-pillar nature of sustainable development without collinear re
 Real-world international data is profoundly messy:
 1. **Filtering Regional Aggregates:** The World Bank combines sovereign nations with regional groupings (`World`, `Arab World`, `High income`). Using `wb.economy.DataFrame(aggregate=False)`, **49 regional aggregates (1,617 rows) were purged**, preserving only 217 sovereign nations.
 2. **Missingness Diagnostic:**
-   - `life_expectancy`: $0.00\%$ missing
-   - `gdp_per_capita`, `co2_per_capita`, `renewable_energy_pct`: $\approx 5.8\%\text{–}6.5\%$ missing
-   - `school_enrollment`: **$42.20\%$ missing** (developing countries only conduct school censuses sporadically).
-3. **Thresholding Hopeless Microstates:** Territories and microstates with $>30\%$ total missingness (e.g., St. Martin, Monaco, Channel Islands, South Sudan) were pruned (16 entities dropped).
+   - `life_expectancy`: 0.00% missing
+   - `gdp_per_capita`, `co2_per_capita`, `renewable_energy_pct`: ~5.8%–6.5% missing
+   - `school_enrollment`: **42.20% missing** (developing countries only conduct school censuses sporadically).
+3. **Thresholding Hopeless Microstates:** Territories and microstates with >30% total missingness (e.g., St. Martin, Monaco, Channel Islands, South Sudan) were pruned (16 entities dropped).
 4. **Time-Series Linear Interpolation per Country:** For nations with solid historical reporting, within-country year gaps were interpolated linearly:
    $$x_{t} = x_{t-1} + \frac{x_{t+1} - x_{t-1}}{2}$$
    Followed by forward-fill (`ffill`) and backward-fill (`bfill`) for historical boundary years.
 5. **Final Result:** A balanced, pristine panel dataset with **zero missing values**:
-   $$\mathbf{193 \text{ Sovereign Nations}} \times \mathbf{33 \text{ Years}} = \mathbf{6,369 \text{ Rows}} \longrightarrow \text{data/processed/wdi_clean_data.csv}$$
+   > **Panel Dataset Dimensions:** 193 Sovereign Nations × 33 Years = **6,369 balanced rows** → `data/processed/wdi_clean_data.csv`
 
 ---
 
@@ -91,9 +91,9 @@ Real-world international data is profoundly messy:
 
 #### 1. Correlation Matrix & The Biomass Effect
 Exploratory correlation revealed an essential empirical finding:
-- `school_enrollment` $\leftrightarrow$ `life_expectancy`: **$+0.81$** (Education and longevity advance together).
-- `renewable_energy_pct` $\leftrightarrow$ `life_expectancy`: **$-0.69$** *(Strong Negative)*
-- `renewable_energy_pct` $\leftrightarrow$ `school_enrollment`: **$-0.70$** *(Strong Negative)*
+- `school_enrollment` ↔ `life_expectancy`: **+0.81** (Education and longevity advance together).
+- `renewable_energy_pct` ↔ `life_expectancy`: **-0.69** *(Strong Negative)*
+- `renewable_energy_pct` ↔ `school_enrollment`: **-0.70** *(Strong Negative)*
 
 ![Figure 1: Correlation Heatmap](figures/01_correlation_heatmap.png)
 
@@ -102,9 +102,10 @@ Exploratory correlation revealed an essential empirical finding:
 ![Figure 2: GDP vs CO2 Decoupling Scatter](figures/02_gdp_vs_co2_scatter.png)
 
 #### 2. Feature Standardization (Z-Score Normalization)
-Because GDP per capita spans $[\$166, \$132,595]$ while $\text{CO}_2$ per capita spans $[0, 202]$, distance-based models would be overwhelmed by monetary variance without scaling:
+Because GDP per capita spans [$166, $132,595] while CO₂ per capita spans [0, 202], distance-based models would be overwhelmed by monetary variance without scaling:
 $$z_i = \frac{x_i - \mu}{\sigma}, \quad \mu = \frac{1}{N}\sum_{i=1}^N x_i, \quad \sigma = \sqrt{\frac{1}{N}\sum_{i=1}^N (x_i - \mu)^2}$$
-Every feature was transformed to $\mu = 0, \sigma = 1 \longrightarrow \text{data/processed/wdi_scaled_data.csv}$.
+
+Every feature was transformed to $\mu = 0, \sigma = 1$ → `data/processed/wdi_scaled_data.csv`.
 
 ---
 
@@ -134,20 +135,20 @@ The mathematical elbow point occurred cleanly at **$K = 4$**, partitioning all 6
 
 ## 5. The 4 Global Development Archetypes
 
-| Cluster | Archetype Name | Mean GDP/cap | Mean Life Exp | Mean Schooling | Mean $\text{CO}_2$/cap | Mean Renewables | Key Representative Nations |
+| Cluster | Archetype Name | Mean GDP/cap | Mean Life Exp | Mean Schooling | Mean CO₂/cap | Mean Renewables | Key Representative Nations |
 | :---: | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| **1** | **Developing & Biomass-Reliant** | $\$1,351$ | $57.1\text{ yrs}$ | $32.9\%$ | $0.50\text{ t}$ | $72.8\%$ | Kenya, Uganda, Ethiopia, Nepal |
-| **0** | **Emerging Transitioners** | $\$5,437$ | $70.4\text{ yrs}$ | $81.0\%$ | $2.96\text{ t}$ | $20.4\%$ | India, Brazil, Indonesia, Vietnam |
-| **2** | **Advanced Decoupled Economies** | $\$36,602$ | $77.9\text{ yrs}$ | $104.2\%$ | $10.12\text{ t}$ | $10.6\%$ | Germany, Japan, France, UK, USA |
-| **3** | **Hyper-Carbon Petrostates** | $\$35,192$ | $71.6\text{ yrs}$ | $103.1\%$ | **$81.13\text{ t}$** | $0.13\%$ | Qatar, Kuwait, Bahrain, UAE |
+| **1** | **Developing & Biomass-Reliant** | $1,351 | 57.1 yrs | 32.9% | 0.50 t | 72.8% | Kenya, Uganda, Ethiopia, Nepal |
+| **0** | **Emerging Transitioners** | $5,437 | 70.4 yrs | 81.0% | 2.96 t | 20.4% | India, Brazil, Indonesia, Vietnam |
+| **2** | **Advanced Decoupled Economies** | $36,602 | 77.9 yrs | 104.2% | 10.12 t | 10.6% | Germany, Japan, France, UK, USA |
+| **3** | **Hyper-Carbon Petrostates** | $35,192 | 71.6 yrs | 103.1% | **81.13 t** | 0.13% | Qatar, Kuwait, Bahrain, UAE |
 
 ---
 
 ## 6. Key Empirical Findings & Conclusions
 
 1. **Distinct Pathways Exist:** The world does not follow a singular development trajectory. Empirical data confirms two diverging paths:
-   - **Path A (The Decoupling Transition):** $\text{Cluster 1} \rightarrow \text{Cluster 0} \rightarrow \text{Cluster 2}$. Countries progress from agrarian biomass reliance through middle-income urbanization into advanced decoupling, where living standards rise while carbon intensity peaks and declines.
-   - **Path B (The Resource Curse / Carbon Lock-In):** Diverges into $\text{Cluster 3}$, where nations achieve high income purely through fossil extraction without developing clean energy infrastructure ($0.13\%$ renewable share).
+   - **Path A (The Decoupling Transition):** Cluster 1 → Cluster 0 → Cluster 2. Countries progress from agrarian biomass reliance through middle-income urbanization into advanced decoupling, where living standards rise while carbon intensity peaks and declines.
+   - **Path B (The Resource Curse / Carbon Lock-In):** Diverges into Cluster 3, where nations achieve high income purely through fossil extraction without developing clean energy infrastructure (0.13% renewable share).
 2. **Empirical Decoupling is Real:**
    - **Germany:** Trajectory curves downward and rightward in PCA space between 1990 and 2022—GDP per capita expanded while emissions dropped significantly (**Absolute Decoupling**).
    - **India:** Made a massive horizontal leap along PC1 from $-1.7$ to $-0.1$ while keeping per-capita emissions below $2\text{ tons}$ (**Relative Decoupling**).
